@@ -3,6 +3,7 @@
 #include <vector_types.h>
 #include <vector>
 #include <string>
+#include "shared_defs.h"
 
 struct GeometryData {
   std::vector<float3> vertices;
@@ -38,6 +39,16 @@ float3 cross3(const float3& a, const float3& b);
 float length3(const float3& v);
 float3 normalize3(const float3& v);
 
+struct SceneConfig {
+  GeometryData geometry;
+  std::vector<Material> materials;
+  std::vector<Light> lights;
+  float3 camera_pos;
+  float3 camera_lookat;
+  float3 camera_up;
+  float camera_fov_y;
+};
+
 int add_vertex(GeometryData& geometry, float x, float y, float z, const float3& normal = {0.0f, 0.0f, 0.0f});
 void add_triangle(GeometryData& geometry, int material, int object_id, int a, int b, int c);
 void add_quad(GeometryData& geometry, int material, int object_id, int a, int b, int c, int d);
@@ -45,4 +56,5 @@ void add_box(GeometryData& geometry, const float3& min_corner, const float3& max
 void add_ply_mesh(GeometryData& geometry, const std::string& filename, int material_id, int object_id, float3 scale, float3 translation);
 void add_uv_sphere(GeometryData& geometry, const float3& center, float radius, int material, int object_id);
 
-GeometryData build_cornell_box(float light_radius);
+SceneConfig build_cornell_box_water(float light_intensity, float light_radius, unsigned int light_type, float reference_radius);
+SceneConfig build_cornell_box_glass(float light_intensity, float light_radius, unsigned int light_type, float reference_radius);

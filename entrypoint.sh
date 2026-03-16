@@ -27,22 +27,29 @@ mkdir -p "${BUILD_DIR}"
 chmod 777 "${BUILD_DIR}"
 EXECUTABLE="./${BUILD_DIR}/example_app_optix"
 make prepare all
-"${EXECUTABLE}" cornell_photon.ppm "${WIDTH}" "${HEIGHT}" "${SPP}" "${PHOTON_COUNT}" 0 "${PHOTON_RADIUS}" "${INDIRECT_SCALE}" "${PHOTON_BOUNCES}" "${PHOTON_NORMAL_REJECT_COS}" "${PPM_ITERATIONS}" "${PPM_ALPHA}" "${DEBUG_STATS}" "${PHOTON_EVAL_MODE}" "${DIRECT_LIGHT_SAMPLES}" "${ENABLE_DENOISER}" "${LIGHT_RADIUS}" "${GLOBAL_PHOTON_REJECTION}" "${MULTI_DIFFUSE_CAUSTIC_MAP}"
 
 # Use environment variable or default images directory
 OUT_DIR="${OUTPUT_DIR:-images}"
-convert "${OUT_DIR}/cornell_photon.ppm" "${OUT_DIR}/cornell_photon.png"
-rm -f "${OUT_DIR}/cornell_photon.ppm"
+
+# 1. Render Water Scene (Default)
+SCENE_NAME=water "${EXECUTABLE}" 01_cornell_water.ppm "${WIDTH}" "${HEIGHT}" "${SPP}" "${PHOTON_COUNT}" 0 "${PHOTON_RADIUS}" "${INDIRECT_SCALE}" "${PHOTON_BOUNCES}" "${PHOTON_NORMAL_REJECT_COS}" "${PPM_ITERATIONS}" "${PPM_ALPHA}" "${DEBUG_STATS}" "${PHOTON_EVAL_MODE}" "${DIRECT_LIGHT_SAMPLES}" "${ENABLE_DENOISER}" "${LIGHT_RADIUS}" "${GLOBAL_PHOTON_REJECTION}" "${MULTI_DIFFUSE_CAUSTIC_MAP}"
+convert "${OUT_DIR}/01_cornell_water.ppm" "${OUT_DIR}/01_cornell_water.png"
+rm -f "${OUT_DIR}/01_cornell_water.ppm"
+
+# 2. Render Glass Scene
+SCENE_NAME=glass "${EXECUTABLE}" 02_cornell_glass.ppm "${WIDTH}" "${HEIGHT}" "${SPP}" "${PHOTON_COUNT}" 0 "${PHOTON_RADIUS}" "${INDIRECT_SCALE}" "${PHOTON_BOUNCES}" "${PHOTON_NORMAL_REJECT_COS}" "${PPM_ITERATIONS}" "${PPM_ALPHA}" "${DEBUG_STATS}" "${PHOTON_EVAL_MODE}" "${DIRECT_LIGHT_SAMPLES}" "${ENABLE_DENOISER}" "${LIGHT_RADIUS}" "${GLOBAL_PHOTON_REJECTION}" "${MULTI_DIFFUSE_CAUSTIC_MAP}"
+convert "${OUT_DIR}/02_cornell_glass.ppm" "${OUT_DIR}/02_cornell_glass.png"
+rm -f "${OUT_DIR}/02_cornell_glass.ppm"
 
 if [ "${RENDER_VARIANTS}" = "1" ]; then
-  "${EXECUTABLE}" cornell_direct.ppm "${WIDTH}" "${HEIGHT}" "${SPP}" 0 0 "${PHOTON_RADIUS}" "${INDIRECT_SCALE}" "${PHOTON_BOUNCES}" "${PHOTON_NORMAL_REJECT_COS}" "${PPM_ITERATIONS}" "${PPM_ALPHA}" "${DEBUG_STATS}" "${PHOTON_EVAL_MODE}" "${DIRECT_LIGHT_SAMPLES}" "${ENABLE_DENOISER}" "${LIGHT_RADIUS}" "${GLOBAL_PHOTON_REJECTION}" "${MULTI_DIFFUSE_CAUSTIC_MAP}"
-  "${EXECUTABLE}" cornell_photon_debug.ppm "${WIDTH}" "${HEIGHT}" "${SPP}" "${PHOTON_COUNT}" 1 "${PHOTON_RADIUS}" "${INDIRECT_SCALE}" "${PHOTON_BOUNCES}" "${PHOTON_NORMAL_REJECT_COS}" "${PPM_ITERATIONS}" "${PPM_ALPHA}" "${DEBUG_STATS}" "${PHOTON_EVAL_MODE}" "${DIRECT_LIGHT_SAMPLES}" "${ENABLE_DENOISER}" "${LIGHT_RADIUS}" "${GLOBAL_PHOTON_REJECTION}" "${MULTI_DIFFUSE_CAUSTIC_MAP}"
-  "${EXECUTABLE}" cornell_photon_indirect.ppm "${WIDTH}" "${HEIGHT}" "${SPP}" "${PHOTON_COUNT}" 2 "${PHOTON_RADIUS}" "${INDIRECT_SCALE}" "${PHOTON_BOUNCES}" "${PHOTON_NORMAL_REJECT_COS}" "${PPM_ITERATIONS}" "${PPM_ALPHA}" "${DEBUG_STATS}" "${PHOTON_EVAL_MODE}" "${DIRECT_LIGHT_SAMPLES}" "${ENABLE_DENOISER}" "${LIGHT_RADIUS}" "${GLOBAL_PHOTON_REJECTION}" "${MULTI_DIFFUSE_CAUSTIC_MAP}"
-  "${EXECUTABLE}" cornell_caustic.ppm "${WIDTH}" "${HEIGHT}" "${SPP}" "${PHOTON_COUNT}" 4 "${PHOTON_RADIUS}" "${INDIRECT_SCALE}" "${PHOTON_BOUNCES}" "${PHOTON_NORMAL_REJECT_COS}" "${PPM_ITERATIONS}" "${PPM_ALPHA}" "${DEBUG_STATS}" "${PHOTON_EVAL_MODE}" "${DIRECT_LIGHT_SAMPLES}" 0 "${LIGHT_RADIUS}" "${GLOBAL_PHOTON_REJECTION}" "${MULTI_DIFFUSE_CAUSTIC_MAP}"
+  SCENE_NAME=water "${EXECUTABLE}" 03_cornell_direct.ppm "${WIDTH}" "${HEIGHT}" "${SPP}" 0 0 "${PHOTON_RADIUS}" "${INDIRECT_SCALE}" "${PHOTON_BOUNCES}" "${PHOTON_NORMAL_REJECT_COS}" "${PPM_ITERATIONS}" "${PPM_ALPHA}" "${DEBUG_STATS}" "${PHOTON_EVAL_MODE}" "${DIRECT_LIGHT_SAMPLES}" "${ENABLE_DENOISER}" "${LIGHT_RADIUS}" "${GLOBAL_PHOTON_REJECTION}" "${MULTI_DIFFUSE_CAUSTIC_MAP}"
+  SCENE_NAME=water "${EXECUTABLE}" 04_cornell_photon_debug.ppm "${WIDTH}" "${HEIGHT}" "${SPP}" "${PHOTON_COUNT}" 1 "${PHOTON_RADIUS}" "${INDIRECT_SCALE}" "${PHOTON_BOUNCES}" "${PHOTON_NORMAL_REJECT_COS}" "${PPM_ITERATIONS}" "${PPM_ALPHA}" "${DEBUG_STATS}" "${PHOTON_EVAL_MODE}" "${DIRECT_LIGHT_SAMPLES}" "${ENABLE_DENOISER}" "${LIGHT_RADIUS}" "${GLOBAL_PHOTON_REJECTION}" "${MULTI_DIFFUSE_CAUSTIC_MAP}"
+  SCENE_NAME=water "${EXECUTABLE}" 05_cornell_photon_indirect.ppm "${WIDTH}" "${HEIGHT}" "${SPP}" "${PHOTON_COUNT}" 2 "${PHOTON_RADIUS}" "${INDIRECT_SCALE}" "${PHOTON_BOUNCES}" "${PHOTON_NORMAL_REJECT_COS}" "${PPM_ITERATIONS}" "${PPM_ALPHA}" "${DEBUG_STATS}" "${PHOTON_EVAL_MODE}" "${DIRECT_LIGHT_SAMPLES}" "${ENABLE_DENOISER}" "${LIGHT_RADIUS}" "${GLOBAL_PHOTON_REJECTION}" "${MULTI_DIFFUSE_CAUSTIC_MAP}"
+  SCENE_NAME=water "${EXECUTABLE}" 06_cornell_caustic.ppm "${WIDTH}" "${HEIGHT}" "${SPP}" "${PHOTON_COUNT}" 4 "${PHOTON_RADIUS}" "${INDIRECT_SCALE}" "${PHOTON_BOUNCES}" "${PHOTON_NORMAL_REJECT_COS}" "${PPM_ITERATIONS}" "${PPM_ALPHA}" "${DEBUG_STATS}" "${PHOTON_EVAL_MODE}" "${DIRECT_LIGHT_SAMPLES}" 0 "${LIGHT_RADIUS}" "${GLOBAL_PHOTON_REJECTION}" "${MULTI_DIFFUSE_CAUSTIC_MAP}"
   
-  convert "${OUT_DIR}/cornell_direct.ppm" "${OUT_DIR}/cornell_direct.png"
-  convert "${OUT_DIR}/cornell_photon_debug.ppm" "${OUT_DIR}/cornell_photon_debug.png"
-  convert "${OUT_DIR}/cornell_photon_indirect.ppm" "${OUT_DIR}/cornell_photon_indirect.png"
-  convert "${OUT_DIR}/cornell_caustic.ppm" "${OUT_DIR}/cornell_caustic.png"
+  convert "${OUT_DIR}/03_cornell_direct.ppm" "${OUT_DIR}/03_cornell_direct.png"
+  convert "${OUT_DIR}/04_cornell_photon_debug.ppm" "${OUT_DIR}/04_cornell_photon_debug.png"
+  convert "${OUT_DIR}/05_cornell_photon_indirect.ppm" "${OUT_DIR}/05_cornell_photon_indirect.png"
+  convert "${OUT_DIR}/06_cornell_caustic.ppm" "${OUT_DIR}/06_cornell_caustic.png"
   make clean_ppm
 fi

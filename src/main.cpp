@@ -371,6 +371,14 @@ int main(int argc, char** argv) {
         }
     }
     const float light_intensity = argc > 20 ? std::stof(argv[20]) : default_light_intensity;
+
+    std::string scene_name = "water";
+    for (int i = 1; i < argc - 1; ++i) {
+        if (std::string(argv[i]) == "--scene") {
+            scene_name = argv[i+1];
+        }
+    }
+
     const float point_power_reference_radius = []() {
       if (const char* env_ref_radius = std::getenv("POINT_POWER_REFERENCE_RADIUS")) {
         try {
@@ -391,16 +399,52 @@ int main(int argc, char** argv) {
     OptixDeviceContext context = nullptr;
     check_optix(optixDeviceContextCreate(nullptr, &options, &context), "optixDeviceContextCreate");
 
-    const float scene_light_geometry_radius =
-      (light_type == kLightTypePoint) ? 0.0f : light_radius;
-    GeometryData geometry = build_cornell_box(scene_light_geometry_radius);
-    std::vector<Material> materials = {
-        {make_vec(0.725f, 0.71f, 0.68f), make_vec(0.0f, 0.0f, 0.0f), kMaterialDiffuse, 1.0f},
-        {make_vec(0.63f, 0.065f, 0.05f), make_vec(0.0f, 0.0f, 0.0f), kMaterialDiffuse, 1.0f},
-        {make_vec(0.14f, 0.45f, 0.091f), make_vec(0.0f, 0.0f, 0.0f), kMaterialDiffuse, 1.0f},
-        {make_vec(1.0f, 1.0f, 1.0f), make_vec(light_intensity, light_intensity, light_intensity), kMaterialDiffuse, 1.0f}, // kLight Emission synchronized
-        {make_vec(1.0f, 1.0f, 1.0f), make_vec(0.0f, 0.0f, 0.0f), kMaterialDielectric, 1.8f},
-    };
+    SceneConfig scene_config;
+    std::string env_scene_val = "";
+    if (const char* env_scene = std::getenv("SCENE_NAME")) {
+        env_scene_val = env_scene;
+    }
+    if (!env_scene_val.empty()) {
+        scene_name = env_scene_val;
+    }
+    for (int i = 1; i < argc - 1; ++i) {
+        if (std::string(argv[i]) == "--scene") {
+            scene_name = argv[i+1];
+        }
+    }
+
+    if (scene_name == "water") {
+        scene_config = build_cornell_box_water(light_intensity, light_radius, light_type, point_power_reference_radius);
+    } else if (scene_name == "glass") {
+        scene_config = build_cornell_box_glass(light_intensity, light_radius, light_type, point_power_reference_radius);
+    } else {
+        std::cerr << "Unknown scene: " << scene_name << ". Defaulting to 'water'.\n";
+        scene_config = build_cornell_box_water(light_intensity, light_radius, light_type, point_power_reference_radius);
+    }
+
+    // Restore Spot light configuration if applicable
+    if (light_type == kLightTypeSpot && !scene_config.lights.empty()) {
+        Light& primary_light = scene_config.lights[0];
+        if (const char* env_dir = std::getenv("SPOT_DIRECTION")) {
+            float x, y, z;
+            if (sscanf(env_dir, "%f,%f,%f", &x, &y, &z) == 3) {
+                primary_light.u = make_vec(x, y, z);
+            }
+        }
+        if (const char* env_cutoff = std::getenv("SPOT_CUTOFF")) {
+            primary_light.v.x = cosf(std::stof(env_cutoff) * 3.1415926535f / 180.0f);
+        }
+        if (const char* env_exp = std::getenv("SPOT_EXPONENT")) {
+            primary_light.v.y = std::stof(env_exp);
+        }
+    } else if (light_type == kLightTypeQuad && !scene_config.lights.empty()) {
+        Light& primary_light = scene_config.lights[0];
+        primary_light.u = make_vec(130.0f, 0.0f, 0.0f);
+        primary_light.v = make_vec(0.0f, 0.0f, 130.0f);
+    }
+
+    GeometryData& geometry = scene_config.geometry;
+    std::vector<Material>& materials = scene_config.materials;
 
     float3* d_vertices = nullptr;
     float3* d_normals = nullptr;
@@ -778,16 +822,7 @@ int main(int argc, char** argv) {
     clear_float4_buffer(d_accumulated_output, width * height);
     check_cuda(cudaDeviceSynchronize(), "cudaDeviceSynchronize(clear_accumulated_output)");
 
-    const float3 camera_position = make_vec(278.0f, 278.0f, -800.0f);
-    const float3 look_at = make_vec(278.0f, 278.0f, 278.0f);
-    const float3 up = make_vec(0.0f, 1.0f, 0.0f);
-    const float fov_y = 35.0f * 3.1415926535f / 180.0f;
     const float aspect = static_cast<float>(width) / static_cast<float>(height);
-    const float3 forward = normalize3(look_at - camera_position);
-    const float3 right = normalize3(cross3(forward, up));
-    const float3 camera_up = normalize3(cross3(right, forward));
-    const float half_height = std::tan(0.5f * fov_y);
-    const float half_width = aspect * half_height;
 
     Params params = {};
     params.image = d_output;
@@ -814,45 +849,7 @@ int main(int argc, char** argv) {
     params.scene_handle = scene_gas.handle;
     params.caustic_photon_handle = 0;
 
-    std::vector<Light> h_lights;
-    Light primary_light = {};
-    primary_light.type = light_type;
-    primary_light.position = make_vec(277.5f, 535.0f, 277.5f);
-    primary_light.u = make_vec(0.0f, -1.0f, 0.0f); // Default direction for Spot
-    primary_light.v = make_vec(cosf(45.0f * 3.1415926535f / 180.0f), 0.0f, 0.0f); // Default cutoff and exponent
-
-    if (light_type == kLightTypeQuad) {
-        primary_light.u = make_vec(130.0f, 0.0f, 0.0f);
-        primary_light.v = make_vec(0.0f, 0.0f, 130.0f);
-    } else if (light_type == kLightTypeSpot) {
-        if (const char* env_dir = std::getenv("SPOT_DIRECTION")) {
-            float x, y, z;
-            if (sscanf(env_dir, "%f,%f,%f", &x, &y, &z) == 3) {
-                primary_light.u = make_vec(x, y, z);
-            }
-        }
-        if (const char* env_cutoff = std::getenv("SPOT_CUTOFF")) {
-            primary_light.v.x = cosf(std::stof(env_cutoff) * 3.1415926535f / 180.0f);
-        }
-        if (const char* env_exp = std::getenv("SPOT_EXPONENT")) {
-            primary_light.v.y = std::stof(env_exp);
-        }
-    }
-
-    float point_equivalent_intensity = light_intensity;
-    if (light_type == kLightTypePoint || light_type == kLightTypeSpot) {
-      const float reference_area =
-          4.0f * 3.1415926535f * point_power_reference_radius * point_power_reference_radius;
-      // Match total emitted power with an area light configured using light_intensity as radiance.
-      point_equivalent_intensity = light_intensity * reference_area * 0.25f;
-      primary_light.radius = 0.0f;
-    } else {
-      primary_light.radius = light_radius;
-    }
-    primary_light.emission = make_vec(point_equivalent_intensity,
-                                      point_equivalent_intensity,
-                                      point_equivalent_intensity);
-    h_lights.push_back(primary_light);
+    std::vector<Light>& h_lights = scene_config.lights;
 
     params.light_count = static_cast<unsigned int>(h_lights.size());
     Light* d_lights = nullptr;
@@ -860,14 +857,18 @@ int main(int argc, char** argv) {
     check_cuda(cudaMemcpy(d_lights, h_lights.data(), h_lights.size() * sizeof(Light), cudaMemcpyHostToDevice), "cudaMemcpy(lights)");
     params.lights = d_lights;
 
-    const float fov_pbrt = 19.5f * 3.1415926535f / 180.0f;
-    const float half_height_pbrt = std::tan(0.5f * fov_pbrt);
-    const float half_width_pbrt = aspect * half_height_pbrt;
-    const float cam_dist = 1600.0f;
-    params.camera_position = make_vec(277.5f, 277.5f, -cam_dist); 
-    params.camera_u = make_vec(1.0f, 0.0f, 0.0f) * half_width_pbrt * cam_dist; 
-    params.camera_v = make_vec(0.0f, 1.0f, 0.0f) * half_height_pbrt * cam_dist;
-    params.camera_w = make_vec(0.0f, 0.0f, 1.0f) * cam_dist;
+    params.camera_position = scene_config.camera_pos;
+    const float3 forward = normalize3(scene_config.camera_lookat - scene_config.camera_pos);
+    const float3 right = normalize3(cross3(forward, scene_config.camera_up));
+    const float3 camera_up = normalize3(cross3(right, forward));
+    
+    const float cam_dist = length3(scene_config.camera_lookat - scene_config.camera_pos);
+    const float half_height = std::tan(0.5f * scene_config.camera_fov_y);
+    const float half_width = aspect * half_height;
+
+    params.camera_u = right * half_width * cam_dist;
+    params.camera_v = camera_up * half_height * cam_dist;
+    params.camera_w = forward * cam_dist;
 
     Params* d_params = nullptr;
     check_cuda(cudaMalloc(reinterpret_cast<void**>(&d_params), sizeof(Params)), "cudaMalloc(params)");

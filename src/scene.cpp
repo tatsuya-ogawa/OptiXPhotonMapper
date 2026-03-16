@@ -275,14 +275,11 @@ void add_uv_sphere(GeometryData& geometry,
   }
 }
 
-GeometryData build_cornell_box(float light_radius) {
-  GeometryData geometry;
-
+namespace {
+void add_cornell_box_walls(GeometryData& geometry) {
   constexpr int kWhite = 0;
   constexpr int kRed = 1;
   constexpr int kGreen = 2;
-  constexpr int kLight = 3;
-  constexpr int kGlass = 4;
 
   const float3 floor_n = make_vec(0.0f, 1.0f, 0.0f);
   const int floor0 = add_vertex(geometry, 0.0f, 0.0f, 0.0f, floor_n);
@@ -318,36 +315,117 @@ GeometryData build_cornell_box(float light_radius) {
   const int right2 = add_vertex(geometry, 555.0f, 555.0f, 555.0f, right_n);
   const int right3 = add_vertex(geometry, 555.0f, 0.0f, 555.0f, right_n);
   add_quad(geometry, kGreen, kObjectRightWall, right0, right1, right2, right3);
+}
 
-  // Sphere Light (skip mesh when using analytic point light)
-  if (light_radius > 1.0e-4f) {
-    const float3 light_center = make_vec(277.5f, 540.0f, 277.5f);
-    add_uv_sphere(geometry, light_center, light_radius, kLight, kObjectLight);
-  }
+void add_default_materials(SceneConfig& config, float light_intensity) {
+    config.materials = {
+        {make_vec(0.725f, 0.71f, 0.68f), make_vec(0.0f, 0.0f, 0.0f), kMaterialDiffuse, 1.0f},
+        {make_vec(0.63f, 0.065f, 0.05f), make_vec(0.0f, 0.0f, 0.0f), kMaterialDiffuse, 1.0f},
+        {make_vec(0.14f, 0.45f, 0.091f), make_vec(0.0f, 0.0f, 0.0f), kMaterialDiffuse, 1.0f},
+        {make_vec(1.0f, 1.0f, 1.0f), make_vec(light_intensity, light_intensity, light_intensity), kMaterialDiffuse, 1.0f},
+        {make_vec(1.0f, 1.0f, 1.0f), make_vec(0.0f, 0.0f, 0.0f), kMaterialDielectric, 1.8f},
+    };
+}
 
-  // Re-added ShortBox (mapped coordinates)
-  add_box(geometry, make_vec(375.0f, 0.0f, 355.0f), make_vec(465.0f, 90.0f, 445.0f), kWhite, kObjectShortBox);
-  // Glass Sphere instead of TallBox
-  add_uv_sphere(geometry, make_vec(130.0f, 90.0f, 197.5f), 90.0f, kGlass, kObjectTallBox);
+void set_default_camera(SceneConfig& config) {
+    config.camera_pos = make_vec(277.5f, 277.5f, -1600.0f);
+    config.camera_lookat = make_vec(277.5f, 277.5f, 277.5f);
+    config.camera_up = make_vec(0.0f, 1.0f, 0.0f);
+    config.camera_fov_y = 19.5f * 3.1415926535f / 180.0f;
+}
 
-  // Water Mesh - Fitted exactly to walls [0, 555] with large waves (height ~115 units)
-  const float3 mesh_scale = make_vec(277.5f, 500.0f, 277.5f);
-  const float3 mesh_offset = make_vec(277.5f, -300.0f, 277.5f);
-  add_ply_mesh(geometry, "models/Mesh001.ply", kGlass, kObjectWater, mesh_scale, mesh_offset);
+void add_default_light(SceneConfig& config, float light_intensity, float light_radius, unsigned int light_type, float reference_radius) {
+    constexpr int kLight = 3;
+  // Sphere lights are represented by both analytic sampling and a visible emissive mesh.
+    if (light_type == kLightTypeSphere && light_radius > 1.0e-4f) {
+        const float3 light_center = make_vec(277.5f, 540.0f, 277.5f);
+        add_uv_sphere(config.geometry, light_center, light_radius, kLight, kObjectLight);
+    }
+    
+    Light primary_light = {};
+    primary_light.type = light_type;
+    primary_light.position = make_vec(277.5f, 535.0f, 277.5f);
+    primary_light.u = make_vec(0.0f, -1.0f, 0.0f); // Default direction
+    primary_light.v = make_vec(cosf(45.0f * 3.1415926535f / 180.0f), 0.0f, 0.0f);
+    primary_light.radius = (light_type == kLightTypePoint || light_type == kLightTypeSpot) ? 0.0f : light_radius;
+    
+    float emission_val = light_intensity;
+    if (light_type == kLightTypePoint || light_type == kLightTypeSpot) {
+        const float reference_area = 4.0f * 3.1415926535f * reference_radius * reference_radius;
+        emission_val = light_intensity * reference_area * 0.25f;
+    }
+    primary_light.emission = make_vec(emission_val, emission_val, emission_val);
+    config.lights.push_back(primary_light);
+}
+} // namespace
 
-  // Imported caustic test mesh from RTProgressivePhotonMapper.
-  // The source asset is roughly 2 units tall, so scale it into the Cornell Box
-  // and place it on the floor near the front-right side of the room.
-  const float imported_mesh_scale = 60.0f;
-  const float3 imported_mesh_scale_vec =
-      make_vec(imported_mesh_scale, imported_mesh_scale, imported_mesh_scale);
-  const float3 imported_mesh_offset = make_vec(644.0079f, -89.9528f, 24.4905f);
-  add_ply_mesh(geometry,
-               "models/mesh_00001.ply",
-               kGlass,
-               kObjectImportedGlass,
-               imported_mesh_scale_vec,
-               imported_mesh_offset);
+SceneConfig build_cornell_box_water(float light_intensity, float light_radius, unsigned int light_type, float reference_radius) {
+    SceneConfig config;
+    add_cornell_box_walls(config.geometry);
+    add_default_materials(config, light_intensity);
+    set_default_camera(config);
+    add_default_light(config, light_intensity, light_radius, light_type, reference_radius);
 
-  return geometry;
+    constexpr int kWhite = 0;
+    constexpr int kGlass = 4;
+
+    // ShortBox
+    add_box(config.geometry, make_vec(375.0f, 0.0f, 355.0f), make_vec(465.0f, 90.0f, 445.0f), kWhite, kObjectShortBox);
+    // Glass Sphere
+    add_uv_sphere(config.geometry, make_vec(130.0f, 90.0f, 197.5f), 90.0f, kGlass, kObjectTallBox);
+
+    // Water Mesh
+    const float3 water_scale = make_vec(277.5f, 500.0f, 277.5f);
+    const float3 water_offset = make_vec(277.5f, -300.0f, 277.5f);
+    add_ply_mesh(config.geometry, "models/Mesh001.ply", kGlass, kObjectWater, water_scale, water_offset);
+
+    // Imported caustic test mesh
+    const float imported_mesh_scale = 60.0f;
+    const float3 imported_mesh_scale_vec = make_vec(imported_mesh_scale, imported_mesh_scale, imported_mesh_scale);
+    const float3 imported_mesh_offset = make_vec(644.0079f, -89.9528f, 24.4905f);
+    add_ply_mesh(config.geometry, "models/mesh_00001.ply", kGlass, kObjectImportedGlass, imported_mesh_scale_vec, imported_mesh_offset);
+
+    return config;
+}
+
+SceneConfig build_cornell_box_glass(float light_intensity, float light_radius, unsigned int light_type, float reference_radius) {
+    SceneConfig config;
+    add_cornell_box_walls(config.geometry);
+    add_default_materials(config, light_intensity);
+    set_default_camera(config);
+  // Scene2 uses a compact, high-intensity sphere light inside the glass mesh.
+    
+    constexpr int kWhite = 0;
+    constexpr int kGlass = 4;
+    
+    // Imported caustic test mesh at the center of which the light will be
+    const float imported_mesh_scale = 60.0f;
+    const float3 imported_mesh_scale_vec = make_vec(imported_mesh_scale, imported_mesh_scale, imported_mesh_scale);
+    const float3 imported_mesh_offset = make_vec(644.0079f, -89.9528f, 24.4905f);
+    add_ply_mesh(config.geometry, "models/mesh_00001.ply", kGlass, kObjectImportedGlass, imported_mesh_scale_vec, imported_mesh_offset);
+
+    const float3 light_pos = make_vec(420.0f, 60.0f, 170.0f);
+    const float sphere_radius = light_radius > 1.0e-4f ? fminf(light_radius, 1.0f) : 1.0f;
+
+    const float reference_area = 4.0f * 3.1415926535f * reference_radius * reference_radius;
+    const float emission_val = light_intensity * reference_area * 0.03f;
+
+    // Add a visible emissive sphere so the light source can be seen directly.
+    const int light_material = static_cast<int>(config.materials.size());
+    config.materials.push_back(
+      {make_vec(1.0f, 1.0f, 1.0f), make_vec(emission_val, emission_val, emission_val), kMaterialDiffuse, 1.0f});
+    add_uv_sphere(config.geometry, light_pos, sphere_radius, light_material, kObjectLight);
+
+    // Sphere light used by direct lighting / photon emission.
+    Light mesh_light = {};
+    mesh_light.type = kLightTypeSphere;
+    mesh_light.position = light_pos;
+    mesh_light.radius = sphere_radius;
+    mesh_light.emission = make_vec(emission_val, emission_val, emission_val);
+    config.lights.push_back(mesh_light);
+
+    // Position TallBox in the far back-left corner as requested for verification
+    add_box(config.geometry, make_vec(50.0f, 0.0f, 400.0f), make_vec(210.0f, 165.0f, 550.0f), kWhite, kObjectTallBox);
+
+    return config;
 }
