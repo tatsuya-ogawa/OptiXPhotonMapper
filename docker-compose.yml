@@ -1,0 +1,16 @@
+services:
+  optix-dev:
+    build:
+      context: .
+    image: optix-dev:local
+    working_dir: /workspace
+    volumes:
+      - ./:/workspace
+    environment:
+      - OPTIX_ROOT=/opt/OptiX
+      - CUDA_HOME=/usr/local/cuda
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+    runtime: nvidia
+    stdin_open: true
+    tty: true

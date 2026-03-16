@@ -1,0 +1,14 @@
+#!/bin/sh
+set -eux
+docker compose run --rm \
+  -e RENDER_VARIANTS=1 \
+  -e PHOTON_EVAL_MODE=0 \
+  -e PHOTON_BOUNCES=10 \
+  -e PHOTON_NORMAL_REJECT_COS=0.9 \
+  -e LIGHT_RADIUS=5 \
+  -e GLOBAL_PHOTON_REJECTION=0.3 \
+  -e LIGHT_INTENSITY=100 \
+  -e PHOTON_COUNT=1000000 \
+  -e LIGHT_TYPE=2 \
+  -e POINT_POWER_REFERENCE_RADIUS=20 \
+  optix-dev
